@@ -1,0 +1,15 @@
+{
+  "extends": ["next"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "off",
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-assign-module-variable": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "react-hooks/rules-of-hooks": "off",
+    "prefer-const": "off",
+    "@typescript-eslint/no-require-imports": "off",
+    "@typescript-eslint/no-namespace": "off",
+    "react/jsx-no-undef": "off"
+  }
+}

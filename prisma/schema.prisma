@@ -1,0 +1,239 @@
+// This is your Prisma schema file
+// Using SQLite for local database storage
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// User accounts
+model User {
+  id              String    @id @default(cuid())
+  username        String    @unique
+  name            String
+  role            String    // 'child' or 'parent'
+  grade           Int?
+  avatar          String?
+  passwordHash    String?   // For parent accounts
+  picturePassword String?   // JSON array for child accounts
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  progress        Progress?
+  sessions        LearningSession[]
+  achievements    UserAchievement[]
+  conversations   Conversation[]
+  knowledgeState  UserKnowledge[]
+}
+
+// User progress tracking
+model Progress {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  level           Int      @default(1)
+  totalXP         Int      @default(0)
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  lastActiveAt    DateTime @default(now())
+  totalTimeSpent  Int      @default(0) // in minutes
+  
+  moduleProgress  ModuleProgress[]
+  dailyActivity   DailyActivity[]
+}
+
+// Module-specific progress
+model ModuleProgress {
+  id               String   @id @default(cuid())
+  progressId       String
+  progress         Progress @relation(fields: [progressId], references: [id])
+  moduleId         String
+  moduleName       String
+  completedLessons Int      @default(0)
+  totalLessons     Int      @default(10)
+  masteryLevel     Int      @default(0) // 0-5 stars
+  totalXPEarned    Int      @default(0)
+  lastAccessedAt   DateTime @default(now())
+  
+  @@unique([progressId, moduleId])
+}
+
+// Learning sessions
+model LearningSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  moduleId    String
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  duration    Int?     // in seconds
+  xpEarned    Int      @default(0)
+  
+  activities  Activity[]
+  conversations Conversation[]
+}
+
+// Individual learning activities
+model Activity {
+  id          String          @id @default(cuid())
+  sessionId   String
+  session     LearningSession @relation(fields: [sessionId], references: [id])
+  type        String          // 'quiz', 'lesson', 'game', 'chat'
+  title       String
+  completed   Boolean         @default(false)
+  score       Int?
+  xpEarned    Int             @default(0)
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  data        String?         // JSON for activity-specific data
+}
+
+// Chat conversations with Claude
+model Conversation {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  sessionId   String?
+  session     LearningSession? @relation(fields: [sessionId], references: [id])
+  moduleContext String?
+  createdAt   DateTime        @default(now())
+  
+  messages    Message[]
+}
+
+// Individual messages in conversations
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  role           String       // 'user', 'assistant', 'system'
+  content        String
+  timestamp      DateTime     @default(now())
+  metadata       String?      // JSON for additional data
+}
+
+// Achievements and badges
+model Achievement {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  icon        String
+  category    String   // 'streak', 'xp', 'subject', 'special'
+  requirement String   // JSON with unlock conditions
+  xpReward    Int      @default(0)
+  
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  achievementId String
+  achievement  Achievement @relation(fields: [achievementId], references: [id])
+  unlockedAt   DateTime    @default(now())
+  
+  @@unique([userId, achievementId])
+}
+
+// Knowledge base for adaptive learning
+model KnowledgeItem {
+  id          String   @id @default(cuid())
+  moduleId    String
+  topic       String
+  subtopic    String?
+  difficulty  String   // 'easy', 'medium', 'hard'
+  gradeLevel  Int
+  content     String   // JSON with structured content
+  tags        String   // JSON array of tags
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  userKnowledge UserKnowledge[]
+  lessons      Lesson[]
+}
+
+// Track what the user knows
+model UserKnowledge {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  knowledgeItemId String
+  knowledgeItem   KnowledgeItem @relation(fields: [knowledgeItemId], references: [id])
+  mastery         Float         @default(0) // 0-1 scale
+  lastSeen        DateTime      @default(now())
+  timesReviewed   Int           @default(0)
+  
+  @@unique([userId, knowledgeItemId])
+}
+
+// Lessons and curriculum
+model Lesson {
+  id             String         @id @default(cuid())
+  moduleId       String
+  knowledgeItemId String?
+  knowledgeItem  KnowledgeItem? @relation(fields: [knowledgeItemId], references: [id])
+  title          String
+  description    String
+  type           String         // 'interactive', 'quiz', 'project', 'video'
+  difficulty     String
+  estimatedTime  Int            // in minutes
+  xpReward       Int
+  content        String         // JSON with lesson content
+  prerequisites  String?        // JSON array of lesson IDs
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  
+  completions    LessonCompletion[]
+}
+
+model LessonCompletion {
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id])
+  userId      String
+  completedAt DateTime @default(now())
+  score       Int?
+  timeSpent   Int?     // in seconds
+  
+  @@unique([lessonId, userId])
+}
+
+// Daily activity tracking
+model DailyActivity {
+  id         String   @id @default(cuid())
+  progressId String
+  progress   Progress @relation(fields: [progressId], references: [id])
+  date       DateTime
+  timeSpent  Int      @default(0) // in minutes
+  xpEarned   Int      @default(0)
+  lessonsCompleted Int @default(0)
+  
+  @@unique([progressId, date])
+}
+
+// Content updates and versioning
+model ContentUpdate {
+  id          String   @id @default(cuid())
+  version     String   @unique
+  moduleId    String?
+  type        String   // 'lesson', 'knowledge', 'achievement'
+  changes     String   // JSON with change details
+  appliedAt   DateTime @default(now())
+  source      String   // 'manual', 'api', 'sync'
+}
+
+// Parent reports
+model ParentReport {
+  id         String   @id @default(cuid())
+  childId    String
+  period     String   // 'daily', 'weekly', 'monthly'
+  startDate  DateTime
+  endDate    DateTime
+  data       String   // JSON with report data
+  createdAt  DateTime @default(now())
+}
